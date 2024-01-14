@@ -5,16 +5,19 @@ import threading
 import os
 from moviepy.editor import VideoFileClip
 
-# Function to convert HH:MM:SS to seconds
+# Function to convert HH:MM:SS.mmm to seconds
 def hhmmss_to_seconds(timestr):
-    hours, minutes, seconds = map(int, timestr.split(':'))
+    parts = timestr.split(':')
+    hours, minutes = map(int, parts[:2])
+    seconds = float(parts[2])
     return hours * 3600 + minutes * 60 + seconds
 
-# Function to convert seconds to HH:MM:SS
+# Function to convert seconds to HH:MM:SS.mmm
 def seconds_to_hhmmss(seconds):
     hours, remainder = divmod(seconds, 3600)
-    minutes, seconds = divmod(remainder, 60)
-    return f"{int(hours):02}:{int(minutes):02}:{int(seconds):02}"
+    minutes, remainder = divmod(remainder, 60)
+    seconds, milliseconds = divmod(remainder, 1)
+    return f"{int(hours):02}:{int(minutes):02}:{int(seconds):02}.{int(milliseconds*1000):03}"
 
 # Function to get the duration of the video
 def get_video_duration(filepath):
@@ -26,8 +29,8 @@ def convert_video_to_gif(video_path, start_time, end_time, output_gif):
     try:
         ffmpeg_cmd = [
             'ffmpeg',
-            '-ss', start_time,
-            '-to', end_time,
+            '-ss', seconds_to_hhmmss(start_time),
+            '-to', seconds_to_hhmmss(end_time),
             '-i', video_path,
             '-vf', 'fps=12,scale=640:-2:flags=lanczos',
             '-c:v', 'gif',
@@ -42,8 +45,8 @@ def convert_video_to_webm(video_path, start_time, end_time, output_webm):
     try:
         ffmpeg_webm_cmd = [
             'ffmpeg',
-            '-ss', start_time,
-            '-to', end_time,
+            '-ss', seconds_to_hhmmss(start_time),
+            '-to', seconds_to_hhmmss(end_time),
             '-i', video_path,
             '-c:v', 'libvpx-vp9',
             '-b:v', '1M',
@@ -86,7 +89,7 @@ def open_file_dialog():
     filepath = filedialog.askopenfilename()
     if filepath:
         video_path_var.set(filepath)
-        duration = get_video_duration(filepath)
+        duration = get_video_duration(filepath) * 1000  # Convert duration to milliseconds
         video_duration.set(duration)
         # Update the sliders' range to the video's duration
         start_slider.config(to=duration)
@@ -95,15 +98,15 @@ def open_file_dialog():
         end_slider.set(duration)
         # Update the entry fields
         start_time_entry.delete(0, tk.END)
-        start_time_entry.insert(0, seconds_to_hhmmss(start_slider.get()))
+        start_time_entry.insert(0, seconds_to_hhmmss(start_slider.get() / 1000))  # Convert slider value to seconds
         end_time_entry.delete(0, tk.END)
-        end_time_entry.insert(0, seconds_to_hhmmss(end_slider.get()))
+        end_time_entry.insert(0, seconds_to_hhmmss(end_slider.get() / 1000))  # Convert slider value to seconds
 
 # Function to sync the slider with the entry field
 def update_time_entry_from_slider(slider, entry):
-    time_in_seconds = slider.get()
+    time_in_milliseconds = slider.get()
     entry.delete(0, tk.END)
-    entry.insert(0, seconds_to_hhmmss(time_in_seconds))
+    entry.insert(0, seconds_to_hhmmss(time_in_milliseconds / 1000))
 
 # Function to sync the entry field with the slider
 def update_slider_from_time_entry(entry, slider):
@@ -112,17 +115,17 @@ def update_slider_from_time_entry(entry, slider):
         # Validate and convert the time
         time_in_seconds = hhmmss_to_seconds(time_str)
         if 0 <= time_in_seconds <= video_duration.get():
-            slider.set(time_in_seconds)
+            slider.set(time_in_seconds * 1000)
         else:
             raise ValueError
     except ValueError:
-        messagebox.showwarning("Warning", "Please enter a valid time in HH:MM:SS format.")
+        messagebox.showwarning("Warning", "Please enter a valid time in HH:MM:SS.mmm format.")
 
 # Function to trigger the conversion process
 def on_convert_button_click():
     video_path = video_path_var.get()
-    start_time = seconds_to_hhmmss(start_slider.get())
-    end_time = seconds_to_hhmmss(end_slider.get())
+    start_time = start_slider.get() / 1000  # Convert from milliseconds to seconds
+    end_time = end_slider.get() / 1000  # Convert from milliseconds to seconds
     if not video_path:
         messagebox.showwarning("Warning", "Please select a video file.")
         return
@@ -144,8 +147,8 @@ def on_convert_button_click():
 
 def on_convert_to_webm_button_click():
     video_path = video_path_var.get()
-    start_time = seconds_to_hhmmss(start_slider.get())
-    end_time = seconds_to_hhmmss(end_slider.get())
+    start_time = start_slider.get() / 1000  # Convert from milliseconds to seconds
+    end_time = end_slider.get() / 1000  # Convert from milliseconds to seconds
     if not video_path:
         messagebox.showwarning("Warning", "Please select a video file.")
         return
@@ -161,8 +164,8 @@ def on_convert_to_webm_button_click():
 
 def on_convert_to_gif_and_webm_button_click():
     video_path = video_path_var.get()
-    start_time = seconds_to_hhmmss(start_slider.get())
-    end_time = seconds_to_hhmmss(end_slider.get())
+    start_time = start_slider.get() / 1000  # Convert from milliseconds to seconds
+    end_time = end_slider.get() / 1000  # Convert from milliseconds to seconds
     if not video_path:
         messagebox.showwarning("Warning", "Please select a video file.")
         return
@@ -196,8 +199,9 @@ browse_button.grid(row=0, column=2)
 
 
 # Sliders and entry fields for start and end times
-start_slider = tk.Scale(root, from_=0, to=100, orient='horizontal', label='Start Time', variable=tk.IntVar(), command=lambda value: update_time_entry_from_slider(start_slider, start_time_entry))
-end_slider = tk.Scale(root, from_=0, to=100, orient='horizontal', label='End Time', variable=tk.IntVar(), command=lambda value: update_time_entry_from_slider(end_slider, end_time_entry))
+start_slider = tk.Scale(root, from_=0, to=video_duration.get() * 1000, orient='horizontal', label='Start Time', variable=tk.IntVar(), command=lambda value: update_time_entry_from_slider(start_slider, start_time_entry))
+
+end_slider = tk.Scale(root, from_=0, to=video_duration.get() * 1000, orient='horizontal', label='End Time', variable=tk.IntVar(), command=lambda value: update_time_entry_from_slider(end_slider, end_time_entry))
 
 start_time_entry = tk.Entry(root, width=8)
 end_time_entry = tk.Entry(root, width=8)
