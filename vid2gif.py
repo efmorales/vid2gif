@@ -4,6 +4,7 @@ import subprocess
 import threading
 import os
 from moviepy.editor import VideoFileClip
+import datetime
 
 # Function to convert HH:MM:SS.mmm to seconds
 def hhmmss_to_seconds(timestr):
@@ -62,6 +63,40 @@ def convert_video_to_webm(video_path, start_time, end_time, output_webm):
 def convert_video_to_gif_and_webm(video_path, start_time, end_time, output_gif, output_webm):
     create_gif_thread(video_path, start_time, end_time, output_gif)
     create_webm_thread(video_path, start_time, end_time, output_webm)
+
+def on_take_screenshot_click():
+    video_path = video_path_var.get()
+    screenshot_time = end_time_entry.get()  # This should be in HH:MM:SS.mmm format
+    if not video_path:
+        messagebox.showwarning("Warning", "Please select a video file.")
+        return
+    
+    # Use the existing function to convert time to seconds, then to HH:MM:SS.mmm for FFmpeg
+    screenshot_time_in_seconds = hhmmss_to_seconds(screenshot_time)
+    screenshot_time_formatted = seconds_to_hhmmss(screenshot_time_in_seconds)
+    
+    # Format the output filename with a timestamp to ensure uniqueness
+    timestamp = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
+    output_screenshot = os.path.join(os.path.expanduser('~/Projects/vid2gif/outputs/screenshots/'), f"screenshot_{timestamp}.png")
+    
+    # Ensure the screenshots directory exists
+    os.makedirs(os.path.dirname(output_screenshot), exist_ok=True)
+    
+    # FFmpeg command for taking a screenshot at high quality
+    ffmpeg_cmd = [
+        'ffmpeg',
+        '-ss', screenshot_time_formatted,
+        '-i', video_path,
+        '-frames:v', '1',
+        '-q:v', '2',  # High quality
+        output_screenshot
+    ]
+    
+    try:
+        subprocess.run(ffmpeg_cmd, check=True)
+        messagebox.showinfo("Success", f"Screenshot saved: {output_screenshot}")
+    except subprocess.CalledProcessError as e:
+        messagebox.showerror("Error", f"An error occurred: {e}")
 
 
 # Function to create a thread to run the FFmpeg command
@@ -224,6 +259,8 @@ convert_button.grid(row=3, column=1, pady=10)
 
 tk.Button(root, text="Convert to WebM", command=on_convert_to_webm_button_click).grid(row=4, column=1, pady=10)
 tk.Button(root, text="Convert to GIF and WebM", command=on_convert_to_gif_and_webm_button_click).grid(row=5, column=1, pady=10)
+take_screenshot_button = tk.Button(root, text="Take Screenshot", command=on_take_screenshot_click)
+take_screenshot_button.grid(row=6, column=1, pady=10)
 
 # Run the application
 root.mainloop()
